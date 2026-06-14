@@ -7,58 +7,70 @@ export type DownloadProgress = {
   percent: number;
 };
 
+function getExtension(url: string, isAudio: boolean, isImage: boolean): string {
+  if (isAudio) return ".mp3";
+  if (isImage) {
+    // Force jpg for Pinterest images — they sometimes serve with no extension or wrong type
+    if (url.includes("pinimg.com")) return ".jpg";
+    if (url.match(/\.(png|gif|webp|jpeg|jpg)/i)) {
+      const m = url.match(/\.(png|gif|webp|jpeg|jpg)/i);
+      return "." + m![1].toLowerCase().replace("jpeg", "jpg");
+    }
+    return ".jpg";
+  }
+  return ".mp4";
+}
+
 export async function downloadAndSave(
   url: string,
-  filename: string,
+  platformName: string,
   isAudio: boolean,
+  isImage: boolean,
   onProgress?: (p: DownloadProgress) => void
-): Promise<{ success: boolean; path?: string; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
-    // Request permission once — if already granted this resolves instantly
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== "granted") {
       return { success: false, error: "Storage permission denied. Please allow it in Settings." };
     }
 
-    const ext = isAudio ? ".mp3" : ".mp4";
-    const safeBase = filename.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 60);
-    const safeFilename = safeBase + "_" + Date.now() + ext; // unique per download → no conflict
-    const fileUri = FileSystem.cacheDirectory + safeFilename;
+    const ext = getExtension(url, isAudio, isImage);
+    const safeBase = platformName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
+    const filename = `${safeBase}_${Date.now()}${ext}`;
+    const fileUri = FileSystem.cacheDirectory + filename;
 
-    // Clean up if somehow the exact file already exists (shouldn't happen with timestamp)
-    const existing = await FileSystem.getInfoAsync(fileUri);
-    if (existing.exists) {
-      await FileSystem.deleteAsync(fileUri, { idempotent: true });
-    }
+    // Clean up if exists (shouldn't with timestamp but just in case)
+    const info = await FileSystem.getInfoAsync(fileUri);
+    if (info.exists) await FileSystem.deleteAsync(fileUri, { idempotent: true });
 
     const downloadResumable = FileSystem.createDownloadResumable(
       url,
       fileUri,
       {},
-      (downloadProgress) => {
-        const total = downloadProgress.totalBytesExpectedToWrite;
-        const written = downloadProgress.bytesWritten;
-        const percent = total > 0 ? Math.round((written / total) * 100) : 0;
-        onProgress?.({ bytesWritten: written, totalBytesExpectedToWrite: total, percent });
+      (dp) => {
+        const total = dp.totalBytesExpectedToWrite;
+        const written = dp.bytesWritten;
+        // total can be -1 when server doesn't send Content-Length
+        const percent = total > 0 ? Math.min(Math.round((written / total) * 100), 99) : -1;
+        onProgress?.({
+          bytesWritten: written,
+          totalBytesExpectedToWrite: total,
+          percent,
+        });
       }
     );
 
     const result = await downloadResumable.downloadAsync();
     if (!result?.uri) throw new Error("Download returned no file");
 
-    // Save to media library — copyAsset: true keeps the cache copy too (avoids "modify" dialog)
-    const asset = await MediaLibrary.createAssetAsync(result.uri);
+    // Save to gallery — createAssetAsync is enough, no album manipulation needed
+    // Album operations trigger the "modify" dialog on Android 10+
+    await MediaLibrary.createAssetAsync(result.uri);
 
-    // Create or add to album without moving the original asset
-    const albums = await MediaLibrary.getAlbumsAsync();
-    const existing_album = albums.find((a) => a.title === "Universal Downloader");
-    if (existing_album) {
-      await MediaLibrary.addAssetsToAlbumAsync([asset], existing_album, false);
-    } else {
-      await MediaLibrary.createAlbumAsync("Universal Downloader", asset, false);
-    }
+    // Clean up cache file after saving to gallery
+    await FileSystem.deleteAsync(result.uri, { idempotent: true });
 
-    return { success: true, path: result.uri };
+    return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message ?? "Unknown download error" };
   }

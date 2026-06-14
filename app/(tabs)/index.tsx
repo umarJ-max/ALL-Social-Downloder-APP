@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Image, ScrollView, ActivityIndicator, Dimensions,
+  Image, ScrollView, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ export default function DownloadScreen() {
   const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
+  const [indeterminate, setIndeterminate] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<Quality | null>(null);
 
   const platform = url.trim() ? detectPlatform(url.trim()) : "unknown";
@@ -34,6 +35,7 @@ export default function DownloadScreen() {
     setMediaInfo(null);
     setError("");
     setProgress(0);
+    setIndeterminate(false);
     setSelectedQuality(null);
   }
 
@@ -65,13 +67,22 @@ export default function DownloadScreen() {
 
     setAppState("downloading");
     setProgress(0);
+    setIndeterminate(false);
 
-    const platform_name = mediaInfo.platform || "media";
     const result = await downloadAndSave(
       downloadUrl,
-      platform_name,
+      mediaInfo.platform || "media",
       isAudio,
-      (p: DownloadProgress) => setProgress(p.percent)
+      mediaInfo.isImage ?? false,
+      (p: DownloadProgress) => {
+        if (p.percent === -1) {
+          // Server didn't send Content-Length — show indeterminate
+          setIndeterminate(true);
+        } else {
+          setIndeterminate(false);
+          setProgress(p.percent);
+        }
+      }
     );
 
     if (result.success) {
@@ -164,7 +175,6 @@ export default function DownloadScreen() {
         {/* Ready State */}
         {appState === "ready" && mediaInfo && (
           <View style={s.resultCard}>
-            {/* Thumbnail */}
             {mediaInfo.thumbnail ? (
               <View style={s.thumbWrap}>
                 <Image source={{ uri: mediaInfo.thumbnail }} style={s.thumb} resizeMode="cover" />
@@ -182,7 +192,6 @@ export default function DownloadScreen() {
 
             <Text style={s.mediaTitle} numberOfLines={2}>{mediaInfo.title}</Text>
 
-            {/* Quality chips — only if API returned multiple */}
             {mediaInfo.qualities.length > 1 && (
               <View style={s.qualitySection}>
                 <Text style={s.sectionLabel}>Select Quality</Text>
@@ -205,17 +214,15 @@ export default function DownloadScreen() {
               </View>
             )}
 
-            {/* If API only gives one quality — show note */}
             {mediaInfo.qualities.length <= 1 && mediaInfo.videoUrl && (
               <View style={s.qualityNote}>
                 <Ionicons name="information-circle-outline" size={14} color="#555" />
                 <Text style={s.qualityNoteTxt}>
-                  Quality selection not available for this platform — best quality will be downloaded.
+                  Best available quality will be downloaded.
                 </Text>
               </View>
             )}
 
-            {/* Download Buttons */}
             <View style={s.dlBtns}>
               {(selectedQuality?.url || mediaInfo.videoUrl) && (
                 <TouchableOpacity
@@ -225,7 +232,9 @@ export default function DownloadScreen() {
                 >
                   <Ionicons name={mediaInfo.isImage ? "image" : "videocam"} size={17} color="#fff" />
                   <Text style={s.dlBtnTxt}>
-                    {mediaInfo.isImage ? "Download Image" : `Download Video${selectedQuality && mediaInfo.qualities.length > 1 ? ` (${selectedQuality.quality})` : ""}`}
+                    {mediaInfo.isImage
+                      ? "Download Image"
+                      : `Download Video${selectedQuality && mediaInfo.qualities.length > 1 ? ` (${selectedQuality.quality})` : ""}`}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -251,9 +260,15 @@ export default function DownloadScreen() {
         {/* Downloading */}
         {appState === "downloading" && (
           <View style={s.progressCard}>
-            <Text style={s.progressLabel}>Downloading… {progress}%</Text>
+            <Text style={s.progressLabel}>
+              {indeterminate ? "Downloading…" : `Downloading… ${progress}%`}
+            </Text>
             <View style={s.progressTrack}>
-              <View style={[s.progressFill, { width: `${progress}%` }]} />
+              {indeterminate ? (
+                <ActivityIndicator color="#7C5CFC" size="small" style={{ alignSelf: "center", marginTop: 4 }} />
+              ) : (
+                <View style={[s.progressFill, { width: `${progress}%` }]} />
+              )}
             </View>
             <Text style={s.progressSub}>Do not close the app</Text>
           </View>
@@ -264,9 +279,7 @@ export default function DownloadScreen() {
           <View style={s.doneCard}>
             <Ionicons name="checkmark-circle" size={52} color="#4CAF50" />
             <Text style={s.doneTitle}>Saved!</Text>
-            <Text style={s.doneSub}>
-              File saved to your gallery under the "Universal Downloader" album.
-            </Text>
+            <Text style={s.doneSub}>File saved to your gallery.</Text>
             <TouchableOpacity style={[s.fetchBtn, { marginTop: 16 }]} onPress={reset}>
               <Ionicons name="add" size={17} color="#fff" />
               <Text style={s.fetchTxt}>Download Another</Text>
@@ -281,7 +294,6 @@ export default function DownloadScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0a0a0f" },
   scroll: { paddingHorizontal: 18, paddingBottom: 40 },
-
   header: { marginTop: 22, marginBottom: 22 },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
   logoBox: {
@@ -290,7 +302,6 @@ const s = StyleSheet.create({
   },
   appName: { fontSize: 20, fontWeight: "800", color: "#fff", letterSpacing: -0.3 },
   tagline: { color: "#444", fontSize: 13, marginLeft: 2 },
-
   card: {
     backgroundColor: "#111218", borderRadius: 16, padding: 14,
     borderWidth: 1, borderColor: "#1c1c2e", marginBottom: 18,
@@ -314,7 +325,6 @@ const s = StyleSheet.create({
   },
   fetchBtnDim: { opacity: 0.4 },
   fetchTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
-
   errorCard: {
     backgroundColor: "#1a0d0d", borderRadius: 14, padding: 16,
     borderWidth: 1, borderColor: "#FF525230",
@@ -322,7 +332,6 @@ const s = StyleSheet.create({
   },
   errorTxt: { color: "#FF7070", fontSize: 13, textAlign: "center", lineHeight: 19 },
   linkTxt: { color: "#7C5CFC", fontWeight: "600", fontSize: 13, marginTop: 2 },
-
   resultCard: {
     backgroundColor: "#111218", borderRadius: 16,
     borderWidth: 1, borderColor: "#1c1c2e",
@@ -341,7 +350,6 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
   },
   mediaTitle: { fontSize: 14, fontWeight: "600", color: "#ccc", padding: 14, paddingBottom: 6 },
-
   qualitySection: { paddingHorizontal: 14, paddingBottom: 8 },
   sectionLabel: { color: "#444", fontSize: 10, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 },
   chips: { flexDirection: "row", gap: 7 },
@@ -352,13 +360,11 @@ const s = StyleSheet.create({
   chipActive: { borderColor: "#7C5CFC", backgroundColor: "#7C5CFC1A" },
   chipTxt: { color: "#555", fontSize: 13, fontWeight: "600" },
   chipTxtActive: { color: "#7C5CFC" },
-
   qualityNote: {
     flexDirection: "row", alignItems: "flex-start", gap: 6,
     paddingHorizontal: 14, paddingBottom: 8,
   },
   qualityNoteTxt: { color: "#444", fontSize: 12, flex: 1, lineHeight: 17 },
-
   dlBtns: { padding: 14, gap: 9 },
   dlBtnPrimary: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -373,16 +379,14 @@ const s = StyleSheet.create({
   dlBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
   anotherBtn: { alignItems: "center", paddingBottom: 14 },
   anotherTxt: { color: "#333", fontSize: 12 },
-
   progressCard: {
     backgroundColor: "#111218", borderRadius: 14, padding: 20,
     borderWidth: 1, borderColor: "#1c1c2e", marginBottom: 18, gap: 10,
   },
   progressLabel: { color: "#bbb", fontSize: 14, fontWeight: "700" },
-  progressTrack: { height: 5, backgroundColor: "#1c1c2e", borderRadius: 3, overflow: "hidden" },
+  progressTrack: { height: 5, backgroundColor: "#1c1c2e", borderRadius: 3, overflow: "hidden", justifyContent: "center" },
   progressFill: { height: "100%", backgroundColor: "#7C5CFC", borderRadius: 3 },
   progressSub: { color: "#333", fontSize: 11 },
-
   doneCard: {
     backgroundColor: "#0d1a0d", borderRadius: 16, padding: 28,
     borderWidth: 1, borderColor: "#4CAF5030",
