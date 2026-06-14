@@ -1,5 +1,5 @@
 // ─── SET YOUR VERCEL URL HERE ─────────────────────────────────────────────────
-const PINTEREST_PROXY_URL = "https://YOUR-VERCEL-PROJECT.vercel.app/api/pinterest";
+const PINTEREST_PROXY_URL = "https://pintrest-proxy.vercel.app/api/pinterest";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const UNIVERSAL_API = "https://ahm7xmakki.com/api/alldl";
