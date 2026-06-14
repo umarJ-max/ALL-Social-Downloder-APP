@@ -23,6 +23,12 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "versionCode": 1
@@ -49,6 +55,13 @@
       "eas": {
         "projectId": "3f9e40ea-e445-43b8-b99a-e806ab6de046"
       }
-    }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3f9e40ea-e445-43b8-b99a-e806ab6de046"
+    },
+    "ios": {}
   }
 }
