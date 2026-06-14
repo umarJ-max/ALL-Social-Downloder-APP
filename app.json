@@ -35,8 +35,7 @@
           "savePhotosPermission": "Allow Universal Downloader to save photos.",
           "isAccessMediaLocationEnabled": true
         }
-      ],
-      "expo-font"
+      ]
     ],
     "scheme": "universal-downloader",
     "experiments": {
